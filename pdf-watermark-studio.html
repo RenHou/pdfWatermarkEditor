@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stamp Room — PDF Watermark Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
+<style>
+  :root{
+    --ink-navy:#1B2430;
+    --ink-navy-2:#232E3D;
+    --ink-navy-3:#2C3B4E;
+    --paper:#F6F3EC;
+    --paper-line:#DAD3C2;
+    --stamp-red:#9B3131;
+    --stamp-red-dark:#7A2626;
+    --pen-blue:#2F4B7C;
+    --pen-blue-light:#4A6795;
+    --ink-text:#1B2430;
+    --muted:#8A8577;
+    --muted-2:#B9C2CE;
+    --success:#4C7A57;
+    --white:#FFFFFF;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:'IBM Plex Sans',sans-serif;
+    background:var(--ink-navy);
+    color:var(--paper);
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--stamp-red);color:var(--white);}
+
+  /* ---------- layout shell ---------- */
+  .app{display:flex;flex-direction:column;height:100vh;min-height:600px;}
+
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 24px;
+    background:var(--ink-navy);
+    border-bottom:1px solid var(--ink-navy-3);
+    flex:0 0 auto;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:34px;height:34px;border:2px solid var(--stamp-red);border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--stamp-red);font-family:'Special Elite',monospace;font-size:14px;
+    transform:rotate(-8deg);flex:0 0 auto;
+  }
+  .brand-text h1{
+    font-family:'Special Elite',monospace;font-size:17px;font-weight:400;
+    margin:0;letter-spacing:0.5px;color:var(--paper);
+  }
+  .brand-text p{margin:0;font-size:11px;color:var(--muted-2);letter-spacing:0.3px;}
+  .topbar-actions{display:flex;gap:8px;}
+
+  .btn{
+    font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:500;
+    padding:8px 14px;border-radius:var(--radius);border:1px solid var(--ink-navy-3);
+    background:var(--ink-navy-2);color:var(--paper);cursor:pointer;
+    transition:background .15s,border-color .15s;
+  }
+  .btn:hover{background:var(--ink-navy-3);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-primary{background:var(--stamp-red);border-color:var(--stamp-red);color:var(--white);}
+  .btn-primary:hover{background:var(--stamp-red-dark);}
+  .btn-ghost{background:transparent;}
+  .btn-small{padding:5px 10px;font-size:12px;}
+  .btn-link{background:none;border:none;color:var(--pen-blue-light);cursor:pointer;font-size:12px;padding:2px 0;text-decoration:underline;text-underline-offset:2px;}
+
+  .main{flex:1 1 auto;display:flex;min-height:0;}
+
+  /* left rail: templates + history */
+  .rail{
+    width:250px;flex:0 0 auto;background:var(--ink-navy-2);
+    border-right:1px solid var(--ink-navy-3);
+    display:flex;flex-direction:column;min-height:0;
+  }
+  .rail-tabs{display:flex;border-bottom:1px solid var(--ink-navy-3);flex:0 0 auto;}
+  .rail-tab{
+    flex:1;padding:11px 8px;text-align:center;font-size:11px;letter-spacing:0.6px;
+    text-transform:uppercase;color:var(--muted-2);cursor:pointer;background:none;border:none;
+    border-bottom:2px solid transparent;font-family:'IBM Plex Sans',sans-serif;font-weight:600;
+  }
+  .rail-tab.active{color:var(--paper);border-bottom-color:var(--stamp-red);}
+  .rail-body{flex:1;overflow-y:auto;padding:14px;}
+  .rail-pane{display:none;}
+  .rail-pane.active{display:block;}
+
+  .stamp-rule{display:flex;align-items:center;gap:8px;margin:0 0 12px 0;}
+  .stamp-rule::before,.stamp-rule::after{content:"";flex:1;height:1px;background:var(--paper-line);opacity:.25;}
+  .stamp-rule span{font-family:'Special Elite',monospace;font-size:10px;letter-spacing:1px;color:var(--muted-2);text-transform:uppercase;}
+
+  .tpl-card{
+    background:var(--ink-navy);border:1px solid var(--ink-navy-3);border-radius:var(--radius);
+    padding:10px 11px;margin-bottom:8px;cursor:pointer;
+  }
+  .tpl-card:hover{border-color:var(--pen-blue);}
+  .tpl-card .tpl-name{font-size:12.5px;font-weight:600;color:var(--paper);margin-bottom:3px;}
+  .tpl-card .tpl-text{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted-2);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tpl-card .tpl-actions{display:flex;gap:10px;margin-top:6px;}
+  .tpl-card .tpl-actions button{font-size:10.5px;}
+  .empty-note{font-size:12px;color:var(--muted-2);line-height:1.5;padding:6px 2px;}
+
+  .hist-row{
+    border-bottom:1px solid var(--ink-navy-3);padding:10px 2px;font-family:'IBM Plex Mono',monospace;
+  }
+  .hist-row .h-name{font-size:11.5px;color:var(--paper);word-break:break-all;}
+  .hist-row .h-meta{font-size:10.5px;color:var(--muted-2);margin-top:3px;}
+  .hist-row .h-actions{margin-top:6px;display:flex;gap:12px;}
+
+  /* center stage */
+  .stage{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--ink-navy);}
+
+  .upload-zone{
+    flex:1;display:flex;align-items:center;justify-content:center;padding:40px;
+  }
+  .dropzone{
+    width:100%;max-width:520px;border:2px dashed var(--ink-navy-3);border-radius:6px;
+    padding:50px 30px;text-align:center;background:var(--ink-navy-2);cursor:pointer;
+    transition:border-color .15s,background .15s;
+  }
+  .dropzone.drag{border-color:var(--stamp-red);background:var(--ink-navy-3);}
+  .dropzone .dz-icon{
+    width:52px;height:52px;margin:0 auto 18px;border:2px solid var(--stamp-red);border-radius:50%;
+    display:flex;align-items:center;justify-content:center;color:var(--stamp-red);
+    font-family:'Special Elite',monospace;font-size:22px;transform:rotate(-6deg);
+  }
+  .dropzone h2{font-family:'Special Elite',monospace;font-weight:400;font-size:18px;margin:0 0 8px;color:var(--paper);}
+  .dropzone p{font-size:13px;color:var(--muted-2);margin:0 0 18px;line-height:1.6;}
+  .dropzone input[type=file]{display:none;}
+
+  .stage-toolbar{
+    display:none;align-items:center;justify-content:space-between;gap:16px;
+    padding:10px 20px;border-bottom:1px solid var(--ink-navy-3);flex:0 0 auto;
+  }
+  .stage-toolbar.active{display:flex;}
+  .file-info{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted-2);}
+  .file-info b{color:var(--paper);}
+  .page-nav{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted-2);}
+  .page-nav select{
+    background:var(--ink-navy-2);color:var(--paper);border:1px solid var(--ink-navy-3);
+    border-radius:var(--radius);padding:5px 8px;font-family:'IBM Plex Mono',monospace;font-size:12px;
+  }
+
+  .canvas-wrap{
+    display:none;flex:1;overflow:auto;align-items:flex-start;justify-content:center;
+    padding:24px;background:
+      repeating-linear-gradient(45deg, #182029 0, #182029 10px, #1B2430 10px, #1B2430 20px);
+  }
+  .canvas-wrap.active{display:flex;}
+  .page-stage{position:relative;box-shadow:0 10px 34px rgba(0,0,0,.45);flex:0 0 auto;}
+  .page-stage canvas{display:block;background:var(--paper);}
+
+  .wm-overlay{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(0deg);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    cursor:grab;user-select:none;white-space:nowrap;padding:2px 4px;
+  }
+  .wm-overlay:active{cursor:grabbing;}
+  .wm-overlay .wm-line{height:0;border-top-style:solid;width:100%;}
+  .wm-overlay .wm-text{padding:3px 0;line-height:1.15;}
+  .wm-overlay.dim{opacity:.28;}
+  .wm-badge{
+    position:absolute;left:50%;top:calc(100% + 6px);transform:translateX(-50%);
+    font-size:10px;background:var(--ink-navy);color:var(--muted-2);border:1px solid var(--ink-navy-3);
+    padding:3px 7px;border-radius:2px;white-space:nowrap;font-family:'IBM Plex Mono',monospace;
+  }
+
+  .pos-hint{
+    position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
+    font-size:10.5px;color:var(--muted-2);background:rgba(27,36,48,.7);padding:4px 9px;border-radius:10px;
+    font-family:'IBM Plex Mono',monospace;pointer-events:none;
+  }
+
+  /* right control panel */
+  .controls{
+    width:330px;flex:0 0 auto;border-left:1px solid var(--ink-navy-3);background:var(--ink-navy-2);
+    display:none;flex-direction:column;min-height:0;
+  }
+  .controls.active{display:flex;}
+  .ctl-tabs{display:flex;flex-wrap:wrap;border-bottom:1px solid var(--ink-navy-3);flex:0 0 auto;}
+  .ctl-tab{
+    padding:10px 8px;font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;
+    color:var(--muted-2);cursor:pointer;background:none;border:none;flex:1;min-width:60px;
+    border-bottom:2px solid transparent;font-weight:600;font-family:'IBM Plex Sans',sans-serif;
+  }
+  .ctl-tab.active{color:var(--paper);border-bottom-color:var(--pen-blue);}
+  .ctl-body{flex:1;overflow-y:auto;padding:16px;}
+  .ctl-pane{display:none;}
+  .ctl-pane.active{display:block;}
+
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;font-size:11px;font-weight:600;letter-spacing:.3px;color:var(--muted-2);
+    text-transform:uppercase;margin-bottom:6px;
+  }
+  .field .row2{display:flex;gap:8px;}
+  .field .row2 > *{flex:1;min-width:0;}
+  textarea,input[type=text],input[type=number],select{
+    width:100%;background:var(--ink-navy);color:var(--paper);border:1px solid var(--ink-navy-3);
+    border-radius:var(--radius);padding:8px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;
+  }
+  textarea{resize:vertical;min-height:52px;font-family:'IBM Plex Mono',monospace;}
+  input[type=color]{
+    width:100%;height:34px;background:var(--ink-navy);border:1px solid var(--ink-navy-3);
+    border-radius:var(--radius);padding:3px;cursor:pointer;
+  }
+  input[type=range]{width:100%;accent-color:var(--stamp-red);}
+  .range-val{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted-2);float:right;}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .toggle-row label{margin:0;text-transform:none;font-size:12.5px;color:var(--paper);font-weight:500;}
+  .switch{position:relative;width:38px;height:21px;flex:0 0 auto;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider-tog{position:absolute;inset:0;background:var(--ink-navy-3);border-radius:20px;cursor:pointer;transition:.15s;}
+  .slider-tog::before{content:"";position:absolute;width:15px;height:15px;left:3px;top:3px;background:var(--paper);border-radius:50%;transition:.15s;}
+  .switch input:checked + .slider-tog{background:var(--stamp-red);}
+  .switch input:checked + .slider-tog::before{transform:translateX(17px);}
+
+  .btn-row-3{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;}
+  .btn-toggle{
+    padding:7px 6px;font-size:11.5px;border-radius:var(--radius);border:1px solid var(--ink-navy-3);
+    background:var(--ink-navy);color:var(--muted-2);cursor:pointer;text-align:center;
+  }
+  .btn-toggle.on{border-color:var(--stamp-red);color:var(--paper);background:var(--ink-navy-3);}
+
+  .pos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+  .pos-grid button{
+    aspect-ratio:1.3;border-radius:var(--radius);border:1px solid var(--ink-navy-3);background:var(--ink-navy);
+    cursor:pointer;position:relative;
+  }
+  .pos-grid button .dot{position:absolute;width:6px;height:6px;background:var(--muted-2);border-radius:50%;}
+  .pos-grid button.active{border-color:var(--stamp-red);}
+  .pos-grid button.active .dot{background:var(--stamp-red);}
+  .pos-empty{visibility:hidden;}
+
+  .var-chip{
+    display:inline-block;margin:0 6px 6px 0;padding:4px 8px;border:1px dashed var(--pen-blue-light);
+    border-radius:12px;font-size:10.5px;color:var(--pen-blue-light);cursor:pointer;font-family:'IBM Plex Mono',monospace;
+  }
+  .var-chip:hover{background:var(--ink-navy-3);}
+
+  .radio-line{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-size:12.5px;color:var(--paper);}
+  .radio-line input{accent-color:var(--stamp-red);}
+
+  .ctl-footer{padding:14px 16px;border-top:1px solid var(--ink-navy-3);flex:0 0 auto;display:flex;gap:8px;}
+  .ctl-footer .btn{flex:1;}
+
+  /* modal */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(9,13,18,.6);display:none;align-items:center;justify-content:center;z-index:50;
+  }
+  .modal-backdrop.active{display:flex;}
+  .modal{
+    width:100%;max-width:380px;background:var(--ink-navy-2);border:1px solid var(--ink-navy-3);
+    border-radius:6px;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.5);
+  }
+  .modal h3{font-family:'Special Elite',monospace;font-weight:400;font-size:16px;margin:0 0 14px;color:var(--paper);}
+  .modal .field label{color:var(--muted-2);}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--ink-navy-2);border:1px solid var(--stamp-red);color:var(--paper);
+    padding:10px 18px;border-radius:4px;font-size:13px;z-index:60;opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;font-family:'IBM Plex Sans',sans-serif;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-thumb{background:var(--ink-navy-3);border-radius:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">SR</div>
+      <div class="brand-text">
+        <h1>Stamp Room</h1>
+        <p>PDF watermarking, entirely in your browser — nothing uploaded anywhere</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="newFileBtn" style="display:none;">Start over</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- LEFT RAIL: templates / history -->
+    <div class="rail">
+      <div class="rail-tabs">
+        <button class="rail-tab active" data-rail="templates">Templates</button>
+        <button class="rail-tab" data-rail="history">History</button>
+      </div>
+      <div class="rail-body">
+        <div class="rail-pane active" id="railTemplates">
+          <div class="stamp-rule"><span>Saved stamps</span></div>
+          <div id="tplList"></div>
+        </div>
+        <div class="rail-pane" id="railHistory">
+          <div class="stamp-rule"><span>This session</span></div>
+          <div id="histList">
+            <p class="empty-note">Nothing generated yet. History only lasts for this browser tab — it clears on refresh.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER STAGE -->
+    <div class="stage">
+
+      <div class="upload-zone" id="uploadZone">
+        <div class="dropzone" id="dropzone">
+          <div class="dz-icon">PDF</div>
+          <h2>Drop a PDF here to stamp it</h2>
+          <p>Works fully offline in this tab — your file never leaves your browser.<br>Max recommended size ~30&nbsp;MB for smooth preview.</p>
+          <button class="btn btn-primary" id="browseBtn">Browse file</button>
+          <input type="file" id="fileInput" accept="application/pdf">
+        </div>
+      </div>
+
+      <div class="stage-toolbar" id="stageToolbar">
+        <div class="file-info" id="fileInfo"></div>
+        <div class="page-nav">
+          <span>Preview page</span>
+          <select id="pageSelect"></select>
+        </div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <div class="page-stage" id="pageStage">
+          <canvas id="pdfCanvas"></canvas>
+          <div class="wm-overlay" id="wmOverlay">
+            <div class="wm-line" id="wmLineTop"></div>
+            <div class="wm-text" id="wmText">FOR INTERNAL USE ONLY</div>
+            <div class="wm-line" id="wmLineBottom"></div>
+          </div>
+          <div class="wm-badge" id="wmBadge" style="display:none;">Not applied to this page</div>
+          <div class="pos-hint" id="posHint" style="display:none;">Drag the stamp to reposition</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT CONTROLS -->
+    <div class="controls" id="controls">
+      <div class="ctl-tabs">
+        <button class="ctl-tab active" data-ctl="text">Text</button>
+        <button class="ctl-tab" data-ctl="lines">Lines</button>
+        <button class="ctl-tab" data-ctl="position">Position</button>
+        <button class="ctl-tab" data-ctl="pages">Pages</button>
+      </div>
+      <div class="ctl-body">
+
+        <!-- TEXT TAB -->
+        <div class="ctl-pane active" id="ctlText">
+          <div class="field">
+            <label>Watermark text</label>
+            <textarea id="wmTextInput">FOR INTERNAL USE ONLY</textarea>
+          </div>
+          <div class="field">
+            <label>Insert dynamic field</label>
+            <span class="var-chip" data-var="COMPANY">{{COMPANY}}</span>
+            <span class="var-chip" data-var="RECIPIENT">{{RECIPIENT}}</span>
+            <span class="var-chip" data-var="DATE">{{DATE}}</span>
+            <span class="var-chip" data-var="DOCUMENT_NAME">{{DOCUMENT_NAME}}</span>
+          </div>
+          <div class="field">
+            <label>Font</label>
+            <div class="row2">
+              <select id="fontFamily">
+                <option value="Helvetica">Helvetica (Arial-style)</option>
+                <option value="Times">Times (serif)</option>
+                <option value="Courier">Courier (monospace)</option>
+              </select>
+              <select id="fontSize">
+                <!-- filled by JS -->
+              </select>
+            </div>
+          </div>
+          <div class="btn-row-3" style="margin-bottom:14px;">
+            <div class="btn-toggle" id="toggleBold">Bold</div>
+            <div class="btn-toggle" id="toggleItalic">Italic</div>
+          </div>
+          <div class="field">
+            <label>Text color</label>
+            <input type="color" id="textColor" value="#1b2430">
+          </div>
+          <div class="field">
+            <label>Opacity <span class="range-val" id="opacityVal">100%</span></label>
+            <input type="range" id="opacityRange" min="5" max="100" value="100">
+          </div>
+          <div class="toggle-row">
+            <label>Background highlight</label>
+            <label class="switch"><input type="checkbox" id="bgToggle"><span class="slider-tog"></span></label>
+          </div>
+          <div id="bgOptions" style="display:none;">
+            <div class="field">
+              <label>Background color</label>
+              <input type="color" id="bgColor" value="#f6e27a">
+            </div>
+            <div class="field">
+              <label>Background opacity <span class="range-val" id="bgOpacityVal">35%</span></label>
+              <input type="range" id="bgOpacityRange" min="5" max="100" value="35">
+            </div>
+          </div>
+        </div>
+
+        <!-- LINES TAB -->
+        <div class="ctl-pane" id="ctlLines">
+          <div class="toggle-row">
+            <label>Top line</label>
+            <label class="switch"><input type="checkbox" id="topLineToggle" checked><span class="slider-tog"></span></label>
+          </div>
+          <div class="toggle-row">
+            <label>Bottom line</label>
+            <label class="switch"><input type="checkbox" id="bottomLineToggle" checked><span class="slider-tog"></span></label>
+          </div>
+          <div class="field">
+            <label>Line color</label>
+            <input type="color" id="lineColor" value="#1b2430">
+          </div>
+          <div class="field">
+            <label>Line thickness <span class="range-val" id="lineThickVal">2px</span></label>
+            <input type="range" id="lineThickRange" min="1" max="8" value="2">
+          </div>
+          <div class="field">
+            <label>Line length <span class="range-val" id="lineLenVal">250px</span></label>
+            <input type="range" id="lineLenRange" min="60" max="500" value="250">
+          </div>
+          <div class="field">
+            <label>Line opacity <span class="range-val" id="lineOpacityVal">100%</span></label>
+            <input type="range" id="lineOpacityRange" min="5" max="100" value="100">
+          </div>
+          <div class="field">
+            <label>Gap to text <span class="range-val" id="lineGapVal">6px</span></label>
+            <input type="range" id="lineGapRange" min="0" max="24" value="6">
+          </div>
+        </div>
+
+        <!-- POSITION TAB -->
+        <div class="ctl-pane" id="ctlPosition">
+          <div class="field">
+            <label>Preset position</label>
+            <div class="pos-grid" id="posGrid">
+              <button data-pos="topLeft"><span class="dot" style="top:5px;left:5px;"></span></button>
+              <button data-pos="topCenter"><span class="dot" style="top:5px;left:calc(50% - 3px);"></span></button>
+              <button data-pos="topRight"><span class="dot" style="top:5px;right:5px;"></span></button>
+              <button class="pos-empty"></button>
+              <button data-pos="center" class="active"><span class="dot" style="top:calc(50% - 3px);left:calc(50% - 3px);"></span></button>
+              <button class="pos-empty"></button>
+              <button data-pos="bottomLeft"><span class="dot" style="bottom:5px;left:5px;"></span></button>
+              <button data-pos="bottomCenter"><span class="dot" style="bottom:5px;left:calc(50% - 3px);"></span></button>
+              <button data-pos="bottomRight"><span class="dot" style="bottom:5px;right:5px;"></span></button>
+            </div>
+          </div>
+          <p class="empty-note" style="margin-bottom:14px;">Tip: you can also drag the stamp directly on the page preview to place it anywhere.</p>
+          <div class="field">
+            <label>Rotation <span class="range-val" id="rotationVal">0°</span></label>
+            <input type="range" id="rotationRange" min="-90" max="90" value="0">
+          </div>
+          <div class="btn-row-3">
+            <div class="btn-toggle" data-rot="0">0°</div>
+            <div class="btn-toggle" data-rot="45">45°</div>
+            <div class="btn-toggle" data-rot="-45">-45°</div>
+            <div class="btn-toggle" data-rot="90">90°</div>
+          </div>
+        </div>
+
+        <!-- PAGES TAB -->
+        <div class="ctl-pane" id="ctlPages">
+          <div class="field">
+            <label>Apply watermark to</label>
+            <div class="radio-line"><input type="radio" name="pagesel" value="all" checked><label>All pages</label></div>
+            <div class="radio-line"><input type="radio" name="pagesel" value="first"><label>First page only</label></div>
+            <div class="radio-line"><input type="radio" name="pagesel" value="last"><label>Last page only</label></div>
+            <div class="radio-line"><input type="radio" name="pagesel" value="custom"><label>Custom range</label></div>
+          </div>
+          <div class="field" id="customRangeField" style="display:none;">
+            <label>Pages (e.g. 1, 3, 5-10)</label>
+            <input type="text" id="customRangeInput" placeholder="1, 3, 5-10">
+          </div>
+          <p class="empty-note" id="pageSelSummary"></p>
+        </div>
+
+      </div>
+      <div class="ctl-footer">
+        <button class="btn" id="saveTemplateBtn">Save as template</button>
+        <button class="btn btn-primary" id="generateBtn">Generate PDF</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js';
+const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
+
+/* ---------------- state ---------------- */
+const state = {
+  originalArrayBuffer: null,
+  fileName: '',
+  totalPages: 0,
+  currentPreviewPage: 1,
+  pageDims: {}, // pageIndex(1-based) -> {width,height} in PDF points
+  settings: defaultSettings(),
+  templates: [],
+  history: [],
+};
+
+function defaultSettings(){
+  return {
+    text: 'FOR INTERNAL USE ONLY',
+    fontFamily: 'Helvetica',
+    fontSize: 16,
+    bold: true,
+    italic: false,
+    color: '#1b2430',
+    opacity: 100,
+    bgEnabled: false,
+    bgColor: '#f6e27a',
+    bgOpacity: 35,
+    topLine: true,
+    bottomLine: true,
+    lineColor: '#1b2430',
+    lineThickness: 2,
+    lineLength: 250,
+    lineOpacity: 100,
+    lineGap: 6,
+    position: 'bottomCenter',
+    customX: null, // percent 0-100, used when position === 'custom'
+    customY: null,
+    rotation: 0,
+    pageSelMode: 'all',
+    customRange: '',
+  };
+}
+
+/* preloaded starter templates */
+state.templates = [
+  { name:'Internal Use', settings: Object.assign(defaultSettings(), { text:'FOR INTERNAL USE ONLY' }) },
+  { name:'Confidential', settings: Object.assign(defaultSettings(), { text:'CONFIDENTIAL', position:'center', rotation:-45, fontSize:28 }) },
+  { name:'Review', settings: Object.assign(defaultSettings(), { text:'FOR REVIEW ONLY' }) },
+  { name:'Company Copy', settings: Object.assign(defaultSettings(), { text:'FOR {{COMPANY}} USE ONLY' }) },
+];
+
+/* ---------------- element refs ---------------- */
+const el = id => document.getElementById(id);
+const dropzone = el('dropzone'), fileInput = el('fileInput'), browseBtn = el('browseBtn');
+const uploadZone = el('uploadZone'), stageToolbar = el('stageToolbar'), canvasWrap = el('canvasWrap');
+const controls = el('controls'), newFileBtn = el('newFileBtn');
+const pdfCanvas = el('pdfCanvas'), pageStage = el('pageStage');
+const wmOverlay = el('wmOverlay'), wmText = el('wmText'), wmLineTop = el('wmLineTop'), wmLineBottom = el('wmLineBottom');
+const wmBadge = el('wmBadge'), posHint = el('posHint');
+const pageSelect = el('pageSelect'), fileInfo = el('fileInfo');
+
+/* ---------------- toast ---------------- */
+let toastTimer;
+function toast(msg){
+  const t = el('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+/* ---------------- modal helper (promise based) ---------------- */
+function showModal(title, bodyHtml, buttons){
+  return new Promise(resolve=>{
+    const backdrop = el('modalBackdrop'), box = el('modalBox');
+    box.innerHTML = `<h3>${title}</h3><div id="modalBody">${bodyHtml}</div><div class="modal-actions" id="modalActions"></div>`;
+    const actions = el('modalActions');
+    buttons.forEach(b=>{
+      const btn = document.createElement('button');
+      btn.className = 'btn ' + (b.primary ? 'btn-primary' : 'btn-ghost');
+      btn.textContent = b.label;
+      btn.onclick = ()=>{
+        const result = b.onClick ? b.onClick(box) : b.value;
+        backdrop.classList.remove('active');
+        resolve(result);
+      };
+      actions.appendChild(btn);
+    });
+    backdrop.classList.add('active');
+  });
+}
+
+/* ---------------- font size dropdown ---------------- */
+(function fillFontSizes(){
+  const sel = el('fontSize');
+  [8,9,10,11,12,14,16,18,20,24,28,32,36,42,48,56,64,72].forEach(s=>{
+    const o = document.createElement('option'); o.value = s; o.textContent = s + ' px'; sel.appendChild(o);
+  });
+  sel.value = 16;
+})();
+
+/* ---------------- rail tabs ---------------- */
+document.querySelectorAll('.rail-tab').forEach(tab=>{
+  tab.onclick = ()=>{
+    document.querySelectorAll('.rail-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.rail-pane').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    el('rail' + tab.dataset.rail[0].toUpperCase() + tab.dataset.rail.slice(1)).classList.add('active');
+  };
+});
+
+/* ---------------- control tabs ---------------- */
+document.querySelectorAll('.ctl-tab').forEach(tab=>{
+  tab.onclick = ()=>{
+    document.querySelectorAll('.ctl-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.ctl-pane').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    el('ctl' + tab.dataset.ctl[0].toUpperCase() + tab.dataset.ctl.slice(1)).classList.add('active');
+  };
+});
+
+/* ---------------- upload handling ---------------- */
+browseBtn.onclick = ()=> fileInput.click();
+dropzone.onclick = (e)=>{ if(e.target === browseBtn) return; fileInput.click(); };
+['dragenter','dragover'].forEach(evt=>dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt=>dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e=>{
+  const f = e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+fileInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(f) handleFile(f);
+});
+
+async function handleFile(file){
+  if(file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')){
+    toast('Please choose a PDF file.'); return;
+  }
+  try{
+    const buf = await file.arrayBuffer();
+    state.originalArrayBuffer = buf;
+    state.fileName = file.name.replace(/\.pdf$/i,'');
+    state.settings = defaultSettings();
+
+    const pdfjsDoc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+    state.totalPages = pdfjsDoc.numPages;
+    state.currentPreviewPage = 1;
+
+    // cache page dims via pdf-lib (points, needed for accurate generation math)
+    const libDoc = await PDFDocument.load(buf.slice(0));
+    libDoc.getPages().forEach((p,i)=>{
+      const { width, height } = p.getSize();
+      state.pageDims[i+1] = { width, height };
+    });
+
+    fileInfo.innerHTML = `<b>${escapeHtml(file.name)}</b> · ${state.totalPages} page${state.totalPages>1?'s':''} · ${(file.size/1024/1024).toFixed(2)} MB`;
+
+    fillPageSelect();
+    uploadZone.style.display = 'none';
+    stageToolbar.classList.add('active');
+    canvasWrap.classList.add('active');
+    controls.classList.add('active');
+    newFileBtn.style.display = 'inline-block';
+
+    await renderPreviewPage(1);
+    syncSettingsToUI();
+    updateOverlay();
+    toast('PDF loaded — customise your stamp on the right.');
+  }catch(err){
+    console.error(err);
+    toast('Could not read that PDF. It may be corrupted or encrypted.');
+  }
+}
+
+newFileBtn.onclick = ()=>{
+  state.originalArrayBuffer = null;
+  uploadZone.style.display = 'flex';
+  stageToolbar.classList.remove('active');
+  canvasWrap.classList.remove('active');
+  controls.classList.remove('active');
+  newFileBtn.style.display = 'none';
+  fileInput.value = '';
+};
+
+function fillPageSelect(){
+  pageSelect.innerHTML = '';
+  for(let i=1;i<=state.totalPages;i++){
+    const o = document.createElement('option'); o.value = i; o.textContent = 'Page ' + i;
+    pageSelect.appendChild(o);
+  }
+}
+pageSelect.onchange = ()=>{
+  state.currentPreviewPage = parseInt(pageSelect.value,10);
+  renderPreviewPage(state.currentPreviewPage).then(updateOverlay);
+};
+
+let currentScale = 1;
+async function renderPreviewPage(pageNum){
+  const pdfjsDoc = await pdfjsLib.getDocument({ data: state.originalArrayBuffer.slice(0) }).promise;
+  const page = await pdfjsDoc.getPage(pageNum);
+  const wrapWidth = canvasWrap.clientWidth - 48;
+  const baseViewport = page.getViewport({ scale: 1 });
+  const targetScale = Math.min(1.6, Math.max(0.4, (wrapWidth) / baseViewport.width));
+  currentScale = targetScale;
+  const viewport = page.getViewport({ scale: targetScale });
+  pdfCanvas.width = viewport.width;
+  pdfCanvas.height = viewport.height;
+  pageStage.style.width = viewport.width + 'px';
+  pageStage.style.height = viewport.height + 'px';
+  const ctx = pdfCanvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+}
+
+/* ---------------- settings <-> UI ---------------- */
+function syncSettingsToUI(){
+  const s = state.settings;
+  el('wmTextInput').value = s.text;
+  el('fontFamily').value = s.fontFamily;
+  el('fontSize').value = s.fontSize;
+  el('toggleBold').classList.toggle('on', s.bold);
+  el('toggleItalic').classList.toggle('on', s.italic);
+  el('textColor').value = s.color;
+  el('opacityRange').value = s.opacity; el('opacityVal').textContent = s.opacity + '%';
+  el('bgToggle').checked = s.bgEnabled; el('bgOptions').style.display = s.bgEnabled ? 'block':'none';
+  el('bgColor').value = s.bgColor;
+  el('bgOpacityRange').value = s.bgOpacity; el('bgOpacityVal').textContent = s.bgOpacity + '%';
+  el('topLineToggle').checked = s.topLine;
+  el('bottomLineToggle').checked = s.bottomLine;
+  el('lineColor').value = s.lineColor;
+  el('lineThickRange').value = s.lineThickness; el('lineThickVal').textContent = s.lineThickness + 'px';
+  el('lineLenRange').value = s.lineLength; el('lineLenVal').textContent = s.lineLength + 'px';
+  el('lineOpacityRange').value = s.lineOpacity; el('lineOpacityVal').textContent = s.lineOpacity + '%';
+  el('lineGapRange').value = s.lineGap; el('lineGapVal').textContent = s.lineGap + 'px';
+  document.querySelectorAll('.pos-grid button[data-pos]').forEach(b=>b.classList.toggle('active', b.dataset.pos === s.position));
+  el('rotationRange').value = s.rotation; el('rotationVal').textContent = s.rotation + '°';
+  document.querySelector(`input[name=pagesel][value="${s.pageSelMode}"]`).checked = true;
+  el('customRangeField').style.display = s.pageSelMode === 'custom' ? 'block':'none';
+  el('customRangeInput').value = s.customRange;
+  updatePageSelSummary();
+}
+
+function updatePageSelSummary(){
+  if(!state.totalPages){ el('pageSelSummary').textContent=''; return; }
+  const pages = resolveTargetPages();
+  el('pageSelSummary').textContent = `Applies to ${pages.length} of ${state.totalPages} page${state.totalPages>1?'s':''}: ${pages.length<=15 ? pages.join(', ') : pages.slice(0,15).join(', ')+'…'}`;
+}
+
+/* ---------------- live control bindings ---------------- */
+el('wmTextInput').oninput = e=>{ state.settings.text = e.target.value; updateOverlay(); };
+el('fontFamily').onchange = e=>{ state.settings.fontFamily = e.target.value; updateOverlay(); };
+el('fontSize').onchange = e=>{ state.settings.fontSize = parseInt(e.target.value,10); updateOverlay(); };
+el('toggleBold').onclick = ()=>{ state.settings.bold = !state.settings.bold; el('toggleBold').classList.toggle('on'); updateOverlay(); };
+el('toggleItalic').onclick = ()=>{ state.settings.italic = !state.settings.italic; el('toggleItalic').classList.toggle('on'); updateOverlay(); };
+el('textColor').oninput = e=>{ state.settings.color = e.target.value; updateOverlay(); };
+el('opacityRange').oninput = e=>{ state.settings.opacity = parseInt(e.target.value,10); el('opacityVal').textContent = state.settings.opacity+'%'; updateOverlay(); };
+
+el('bgToggle').onchange = e=>{ state.settings.bgEnabled = e.target.checked; el('bgOptions').style.display = e.target.checked?'block':'none'; updateOverlay(); };
+el('bgColor').oninput = e=>{ state.settings.bgColor = e.target.value; updateOverlay(); };
+el('bgOpacityRange').oninput = e=>{ state.settings.bgOpacity = parseInt(e.target.value,10); el('bgOpacityVal').textContent = state.settings.bgOpacity+'%'; updateOverlay(); };
+
+el('topLineToggle').onchange = e=>{ state.settings.topLine = e.target.checked; updateOverlay(); };
+el('bottomLineToggle').onchange = e=>{ state.settings.bottomLine = e.target.checked; updateOverlay(); };
+el('lineColor').oninput = e=>{ state.settings.lineColor = e.target.value; updateOverlay(); };
+el('lineThickRange').oninput = e=>{ state.settings.lineThickness = parseInt(e.target.value,10); el('lineThickVal').textContent = state.settings.lineThickness+'px'; updateOverlay(); };
+el('lineLenRange').oninput = e=>{ state.settings.lineLength = parseInt(e.target.value,10); el('lineLenVal').textContent = state.settings.lineLength+'px'; updateOverlay(); };
+el('lineOpacityRange').oninput = e=>{ state.settings.lineOpacity = parseInt(e.target.value,10); el('lineOpacityVal').textContent = state.settings.lineOpacity+'%'; updateOverlay(); };
+el('lineGapRange').oninput = e=>{ state.settings.lineGap = parseInt(e.target.value,10); el('lineGapVal').textContent = state.settings.lineGap+'px'; updateOverlay(); };
+
+document.querySelectorAll('.pos-grid button[data-pos]').forEach(b=>{
+  b.onclick = ()=>{
+    state.settings.position = b.dataset.pos;
+    state.settings.customX = null; state.settings.customY = null;
+    document.querySelectorAll('.pos-grid button[data-pos]').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    updateOverlay();
+  };
+});
+
+el('rotationRange').oninput = e=>{ state.settings.rotation = parseInt(e.target.value,10); el('rotationVal').textContent = state.settings.rotation+'°'; updateOverlay(); };
+document.querySelectorAll('[data-rot]').forEach(b=>{
+  b.onclick = ()=>{ state.settings.rotation = parseInt(b.dataset.rot,10); el('rotationRange').value = state.settings.rotation; el('rotationVal').textContent = state.settings.rotation+'°'; updateOverlay(); };
+});
+
+document.querySelectorAll('input[name=pagesel]').forEach(r=>{
+  r.onchange = ()=>{
+    state.settings.pageSelMode = r.value;
+    el('customRangeField').style.display = r.value === 'custom' ? 'block' : 'none';
+    updatePageSelSummary(); updateOverlay();
+  };
+});
+el('customRangeInput').oninput = e=>{ state.settings.customRange = e.target.value; updatePageSelSummary(); updateOverlay(); };
+
+document.querySelectorAll('.var-chip').forEach(chip=>{
+  chip.onclick = ()=>{
+    const ta = el('wmTextInput');
+    const token = `{{${chip.dataset.var}}}`;
+    const start = ta.selectionStart ?? ta.value.length, end = ta.selectionEnd ?? ta.value.length;
+    ta.value = ta.value.slice(0,start) + token + ta.value.slice(end);
+    state.settings.text = ta.value;
+    updateOverlay();
+    ta.focus();
+  };
+});
+
+/* ---------------- overlay preview ---------------- */
+const FONT_CSS = { Helvetica: `'Helvetica Neue', Arial, sans-serif`, Times: `'Times New Roman', Times, serif`, Courier: `'Courier New', Courier, monospace` };
+
+function hexToRgba(hex, opacityPct){
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${opacityPct/100})`;
+}
+
+function positionToPercent(pos){
+  const map = {
+    topLeft:[14,10], topCenter:[50,10], topRight:[86,10],
+    center:[50,50],
+    bottomLeft:[14,90], bottomCenter:[50,90], bottomRight:[86,90],
+  };
+  return map[pos] || [50,50];
+}
+
+function updateOverlay(){
+  if(!state.originalArrayBuffer) return;
+  const s = state.settings;
+  const displayText = resolvePreviewText(s.text);
+  wmText.textContent = displayText || '(empty)';
+  wmText.style.fontFamily = FONT_CSS[s.fontFamily];
+  wmText.style.fontSize = Math.round(s.fontSize * currentScale) + 'px';
+  wmText.style.fontWeight = s.bold ? '700':'400';
+  wmText.style.fontStyle = s.italic ? 'italic':'normal';
+  wmText.style.color = hexToRgba(s.color, s.opacity);
+  wmText.style.background = s.bgEnabled ? hexToRgba(s.bgColor, s.bgOpacity) : 'transparent';
+  wmText.style.padding = s.bgEnabled ? '2px 10px' : '2px 0';
+
+  wmLineTop.style.display = s.topLine ? 'block':'none';
+  wmLineBottom.style.display = s.bottomLine ? 'block':'none';
+  const lineColorCss = hexToRgba(s.lineColor, s.lineOpacity);
+  [wmLineTop, wmLineBottom].forEach(l=>{
+    l.style.borderTopWidth = Math.max(1, Math.round(s.lineThickness*currentScale)) + 'px';
+    l.style.borderTopColor = lineColorCss;
+    l.style.width = Math.round(s.lineLength*currentScale) + 'px';
+  });
+  wmLineTop.style.marginBottom = Math.round(s.lineGap*currentScale)+'px';
+  wmLineBottom.style.marginTop = Math.round(s.lineGap*currentScale)+'px';
+
+  let xPct, yPct;
+  if(s.position === 'custom' && s.customX !== null){
+    xPct = s.customX; yPct = s.customY;
+  }else{
+    [xPct, yPct] = positionToPercent(s.position);
+  }
+  wmOverlay.style.left = xPct + '%';
+  wmOverlay.style.top = yPct + '%';
+  wmOverlay.style.transform = `translate(-50%,-50%) rotate(${-s.rotation}deg)`;
+
+  const included = pageInSelection(state.currentPreviewPage);
+  wmOverlay.classList.toggle('dim', !included);
+  wmBadge.style.display = included ? 'none' : 'block';
+
+  updatePageSelSummary();
+}
+
+function resolvePreviewText(text){
+  const now = new Date();
+  const dateStr = String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear();
+  return text
+    .replace(/{{\s*DATE\s*}}/gi, dateStr)
+    .replace(/{{\s*DOCUMENT_NAME\s*}}/gi, state.fileName || 'Document');
+}
+
+/* dragging the overlay */
+let dragging = false, dragOffset = {x:0,y:0};
+wmOverlay.addEventListener('pointerdown', e=>{
+  dragging = true;
+  wmOverlay.setPointerCapture(e.pointerId);
+  posHint.style.display = 'block';
+});
+wmOverlay.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const rect = pageStage.getBoundingClientRect();
+  let xPct = ((e.clientX - rect.left) / rect.width) * 100;
+  let yPct = ((e.clientY - rect.top) / rect.height) * 100;
+  xPct = Math.min(98, Math.max(2, xPct));
+  yPct = Math.min(98, Math.max(2, yPct));
+  state.settings.position = 'custom';
+  state.settings.customX = xPct;
+  state.settings.customY = yPct;
+  document.querySelectorAll('.pos-grid button[data-pos]').forEach(x=>x.classList.remove('active'));
+  updateOverlay();
+});
+['pointerup','pointercancel'].forEach(evt=>wmOverlay.addEventListener(evt, ()=>{ dragging=false; posHint.style.display='none'; }));
+
+/* ---------------- page selection parsing ---------------- */
+function resolveTargetPages(){
+  const s = state.settings, total = state.totalPages;
+  if(!total) return [];
+  if(s.pageSelMode === 'all') return Array.from({length:total},(_,i)=>i+1);
+  if(s.pageSelMode === 'first') return [1];
+  if(s.pageSelMode === 'last') return [total];
+  // custom
+  const out = new Set();
+  (s.customRange||'').split(',').map(t=>t.trim()).filter(Boolean).forEach(tok=>{
+    const m = tok.match(/^(\d+)\s*-\s*(\d+)$/);
+    if(m){
+      let a = parseInt(m[1],10), b = parseInt(m[2],10);
+      if(a>b) [a,b]=[b,a];
+      for(let i=a;i<=b;i++) if(i>=1 && i<=total) out.add(i);
+    }else{
+      const n = parseInt(tok,10);
+      if(!isNaN(n) && n>=1 && n<=total) out.add(n);
+    }
+  });
+  return Array.from(out).sort((a,b)=>a-b);
+}
+function pageInSelection(pageNum){ return resolveTargetPages().includes(pageNum); }
+
+/* ---------------- dynamic variable resolution for generation ---------------- */
+function extractVars(text){
+  const found = new Set();
+  (text.match(/{{\s*([A-Z_]+)\s*}}/gi)||[]).forEach(m=>{
+    const name = m.replace(/[{}]/g,'').trim().toUpperCase();
+    if(name !== 'DATE' && name !== 'DOCUMENT_NAME') found.add(name);
+  });
+  return Array.from(found);
+}
+
+async function resolveTextForGeneration(text){
+  const vars = extractVars(text);
+  let resolved = text;
+  if(vars.length){
+    const fields = vars.map(v=>`<div class="field"><label>${escapeHtml(v)}</label><input type="text" id="var_${v}" placeholder="Enter ${escapeHtml(v.toLowerCase())}"></div>`).join('');
+    const values = await showModal('Fill in stamp details', fields, [
+      { label:'Cancel', value:null },
+      { label:'Continue', primary:true, onClick: (box)=>{
+          const obj = {};
+          vars.forEach(v=> obj[v] = box.querySelector('#var_'+v).value || '');
+          return obj;
+        }},
+    ]);
+    if(!values) return null;
+    vars.forEach(v=>{
+      resolved = resolved.replace(new RegExp(`{{\\s*${v}\\s*}}`,'gi'), values[v]);
+    });
+  }
+  resolved = resolvePreviewText(resolved);
+  return resolved;
+}
+
+/* ---------------- PDF generation via pdf-lib ---------------- */
+const FONT_MAP = {
+  Helvetica: { reg:'Helvetica', bold:'HelveticaBold', italic:'HelveticaOblique', boldItalic:'HelveticaBoldOblique' },
+  Times: { reg:'TimesRoman', bold:'TimesRomanBold', italic:'TimesRomanItalic', boldItalic:'TimesRomanBoldItalic' },
+  Courier: { reg:'Courier', bold:'CourierBold', italic:'CourierOblique', boldItalic:'CourierBoldOblique' },
+};
+function pickStandardFont(family, bold, italic){
+  const m = FONT_MAP[family];
+  const key = bold && italic ? 'boldItalic' : bold ? 'bold' : italic ? 'italic' : 'reg';
+  return StandardFonts[m[key]];
+}
+function hexToRgb01(hex){
+  const h = hex.replace('#','');
+  return { r: parseInt(h.substring(0,2),16)/255, g: parseInt(h.substring(2,4),16)/255, b: parseInt(h.substring(4,6),16)/255 };
+}
+function rotateVec(x,y,angleDeg){
+  const a = angleDeg * Math.PI/180;
+  return { x: x*Math.cos(a) - y*Math.sin(a), y: x*Math.sin(a) + y*Math.cos(a) };
+}
+
+el('generateBtn').onclick = generatePdf;
+
+async function generatePdf(){
+  if(!state.originalArrayBuffer){ toast('Upload a PDF first.'); return; }
+  const s = state.settings;
+  const targetPages = resolveTargetPages();
+  if(!targetPages.length){ toast('No pages selected — check the Pages tab.'); return; }
+  if(!s.text.trim()){ toast('Enter watermark text first.'); return; }
+
+  const resolvedText = await resolveTextForGeneration(s.text);
+  if(resolvedText === null) return; // cancelled
+
+  const btn = el('generateBtn'); const originalLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Generating…';
+
+  try{
+    const pdfDoc = await PDFDocument.load(state.originalArrayBuffer.slice(0));
+    const font = await pdfDoc.embedFont(pickStandardFont(s.fontFamily, s.bold, s.italic));
+    const textColor = hexToRgb01(s.color);
+    const lineColor = hexToRgb01(s.lineColor);
+    const bgColor = hexToRgb01(s.bgColor);
+    const fontSize = s.fontSize;
+    const textWidth = font.widthOfTextAtSize(resolvedText, fontSize);
+    const textHeight = fontSize;
+    const opacity = s.opacity/100;
+    const lineOpacity = s.lineOpacity/100;
+
+    const pages = pdfDoc.getPages();
+    targetPages.forEach(pageNum=>{
+      const page = pages[pageNum-1];
+      const { width: pw, height: ph } = page.getSize();
+
+      let cx, cy;
+      if(s.position === 'custom' && s.customX !== null){
+        cx = (s.customX/100) * pw;
+        cy = ph - (s.customY/100) * ph; // flip Y (screen top-down vs PDF bottom-up)
+      }else{
+        const [xPct,yPct] = positionToPercent(s.position);
+        cx = (xPct/100) * pw;
+        cy = ph - (yPct/100) * ph;
+      }
+
+      const angle = s.rotation;
+
+      // background rect behind text (drawn first)
+      if(s.bgEnabled){
+        const padX = 10, padY = 6;
+        const rectW = textWidth + padX*2, rectH = textHeight + padY*2;
+        const offset = rotateVec(-rectW/2, -rectH/2, angle);
+        page.drawRectangle({
+          x: cx + offset.x, y: cy + offset.y,
+          width: rectW, height: rectH,
+          rotate: degrees(angle),
+          color: rgb(bgColor.r,bgColor.g,bgColor.b),
+          opacity: s.bgOpacity/100,
+        });
+      }
+
+      // text (baseline anchor offset from center)
+      const baseOffset = rotateVec(-textWidth/2, -textHeight*0.32, angle);
+      page.drawText(resolvedText, {
+        x: cx + baseOffset.x, y: cy + baseOffset.y,
+        size: fontSize, font,
+        color: rgb(textColor.r,textColor.g,textColor.b),
+        opacity, rotate: degrees(angle),
+      });
+
+      // lines
+      const halfLen = s.lineLength/2;
+      if(s.topLine){
+        const lineCenterOffset = rotateVec(0, textHeight*0.5 + s.lineGap, angle);
+        const lcx = cx + lineCenterOffset.x, lcy = cy + lineCenterOffset.y;
+        const half = rotateVec(halfLen,0,angle);
+        page.drawLine({
+          start: { x: lcx-half.x, y: lcy-half.y },
+          end: { x: lcx+half.x, y: lcy+half.y },
+          thickness: s.lineThickness,
+          color: rgb(lineColor.r,lineColor.g,lineColor.b),
+          opacity: lineOpacity,
+        });
+      }
+      if(s.bottomLine){
+        const lineCenterOffset = rotateVec(0, -(textHeight*0.6 + s.lineGap), angle);
+        const lcx = cx + lineCenterOffset.x, lcy = cy + lineCenterOffset.y;
+        const half = rotateVec(halfLen,0,angle);
+        page.drawLine({
+          start: { x: lcx-half.x, y: lcy-half.y },
+          end: { x: lcx+half.x, y: lcy+half.y },
+          thickness: s.lineThickness,
+          color: rgb(lineColor.r,lineColor.g,lineColor.b),
+          opacity: lineOpacity,
+        });
+      }
+    });
+
+    const outBytes = await pdfDoc.save();
+    const blob = new Blob([outBytes], { type:'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const outName = `${state.fileName}_Stamped.pdf`;
+
+    // trigger download
+    const a = document.createElement('a');
+    a.href = url; a.download = outName; document.body.appendChild(a); a.click(); a.remove();
+
+    addHistoryEntry({ name: outName, watermark: resolvedText, pages: targetPages.length, url, time: new Date() });
+    toast(`Generated ${outName}`);
+  }catch(err){
+    console.error(err);
+    toast('Something went wrong generating the PDF — see console for details.');
+  }finally{
+    btn.disabled = false; btn.textContent = originalLabel;
+  }
+}
+
+/* ---------------- history ---------------- */
+function addHistoryEntry(entry){
+  state.history.unshift(entry);
+  renderHistory();
+}
+function renderHistory(){
+  const box = el('histList');
+  if(!state.history.length){
+    box.innerHTML = '<p class="empty-note">Nothing generated yet. History only lasts for this browser tab — it clears on refresh.</p>';
+    return;
+  }
+  box.innerHTML = '';
+  state.history.forEach((h,i)=>{
+    const row = document.createElement('div'); row.className = 'hist-row';
+    const timeStr = h.time.toLocaleDateString() + ' ' + h.time.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    row.innerHTML = `
+      <div class="h-name">${escapeHtml(h.name)}</div>
+      <div class="h-meta">"${escapeHtml(truncate(h.watermark,28))}" · ${h.pages} page${h.pages>1?'s':''} · ${timeStr}</div>
+      <div class="h-actions">
+        <a class="btn-link" href="${h.url}" download="${escapeAttr(h.name)}">Download again</a>
+        <button class="btn-link" data-i="${i}" style="color:#c46a6a;">Remove</button>
+      </div>`;
+    row.querySelector('button').onclick = ()=>{
+      URL.revokeObjectURL(h.url);
+      state.history.splice(i,1);
+      renderHistory();
+    };
+    box.appendChild(row);
+  });
+}
+
+/* ---------------- templates ---------------- */
+function renderTemplates(){
+  const box = el('tplList');
+  if(!state.templates.length){
+    box.innerHTML = '<p class="empty-note">No saved templates yet.</p>';
+    return;
+  }
+  box.innerHTML = '';
+  state.templates.forEach((t,i)=>{
+    const card = document.createElement('div'); card.className = 'tpl-card';
+    card.innerHTML = `
+      <div class="tpl-name">${escapeHtml(t.name)}</div>
+      <div class="tpl-text">${escapeHtml(t.settings.text)}</div>
+      <div class="tpl-actions">
+        <button class="btn-link" data-act="load">Load</button>
+        <button class="btn-link" data-act="dup">Duplicate</button>
+        <button class="btn-link" data-act="del" style="color:#c46a6a;">Delete</button>
+      </div>`;
+    card.querySelector('[data-act=load]').onclick = (e)=>{ e.stopPropagation(); loadTemplate(i); };
+    card.querySelector('[data-act=dup]').onclick = (e)=>{ e.stopPropagation(); duplicateTemplate(i); };
+    card.querySelector('[data-act=del]').onclick = (e)=>{ e.stopPropagation(); deleteTemplate(i); };
+    card.onclick = ()=> loadTemplate(i);
+    box.appendChild(card);
+  });
+}
+function loadTemplate(i){
+  if(!state.originalArrayBuffer){ toast('Upload a PDF first, then load a template.'); return; }
+  state.settings = JSON.parse(JSON.stringify(state.templates[i].settings));
+  syncSettingsToUI();
+  updateOverlay();
+  toast(`Loaded template "${state.templates[i].name}"`);
+}
+function duplicateTemplate(i){
+  const copy = JSON.parse(JSON.stringify(state.templates[i]));
+  copy.name = copy.name + ' (copy)';
+  state.templates.splice(i+1,0,copy);
+  renderTemplates();
+}
+async function deleteTemplate(i){
+  const ok = await showModal('Delete template?', `<p style="font-size:13px;color:var(--muted-2);">Delete "${escapeHtml(state.templates[i].name)}"? This can't be undone.</p>`, [
+    { label:'Cancel', value:false },
+    { label:'Delete', primary:true, value:true },
+  ]);
+  if(ok){ state.templates.splice(i,1); renderTemplates(); }
+}
+
+el('saveTemplateBtn').onclick = async ()=>{
+  if(!state.originalArrayBuffer){ toast('Upload a PDF first.'); return; }
+  const name = await showModal('Save as template', `
+    <div class="field"><label>Template name</label><input type="text" id="tplNameInput" placeholder="e.g. Internal Use" autofocus></div>
+  `, [
+    { label:'Cancel', value:null },
+    { label:'Save', primary:true, onClick:(box)=> box.querySelector('#tplNameInput').value.trim() },
+  ]);
+  if(!name) return;
+  state.templates.push({ name, settings: JSON.parse(JSON.stringify(state.settings)) });
+  renderTemplates();
+  toast(`Saved template "${name}"`);
+};
+
+/* ---------------- utils ---------------- */
+function escapeHtml(str){ return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(str){ return escapeHtml(str); }
+function truncate(str,n){ return str.length>n ? str.slice(0,n)+'…' : str; }
+
+/* resize handling: re-render preview + overlay on window resize */
+let resizeTimer;
+window.addEventListener('resize', ()=>{
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(()=>{
+    if(state.originalArrayBuffer){ renderPreviewPage(state.currentPreviewPage).then(updateOverlay); }
+  },200);
+});
+
+/* init */
+renderTemplates();
+renderHistory();
+</script>
+</body>
+</html>
